@@ -1,0 +1,14 @@
+{
+  "name": "cyprus-road-signs",
+  "version": "1.0.0",
+  "description": "Standalone PWA to study official Cyprus road signs and prepare for the DMV theory test.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
+}

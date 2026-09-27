@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Study official Cyprus road signs and prepare for the DMV theory test." />
+  <title>Cyprus Road Signs</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-bar">
+      <h1 class="app-title">Cyprus Road Signs</h1>
+      <span class="app-screen" id="app-screen"></span>
+    </header>
+
+    <main id="view" class="view" tabindex="-1"></main>
+
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="nav-tab" data-tab="tests" type="button" aria-label="Tests">
+        <span class="nav-icon" aria-hidden="true">✓</span>
+        <span class="nav-label">Tests</span>
+      </button>
+      <button class="nav-tab" data-tab="catalog" type="button" aria-label="Catalog">
+        <span class="nav-icon" aria-hidden="true">▦</span>
+        <span class="nav-label">Catalog</span>
+      </button>
+      <button class="nav-tab" data-tab="progress" type="button" aria-label="Progress">
+        <span class="nav-icon" aria-hidden="true">▲</span>
+        <span class="nav-label">Progress</span>
+      </button>
+      <button class="nav-tab" data-tab="forms" type="button" aria-label="Forms">
+        <span class="nav-icon" aria-hidden="true">▤</span>
+        <span class="nav-label">Forms</span>
+      </button>
+      <span class="nav-indicator" aria-hidden="true"></span>
+    </nav>
+  </div>
+
+  <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
