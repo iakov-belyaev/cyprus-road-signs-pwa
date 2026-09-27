@@ -2,8 +2,8 @@
 
 import { el } from '../ui.js';
 
-const PDF_PATH = 'assets/forms/delta7.pdf';
-const OFFICIAL_URL = 'https://www.mcw.gov.cy/mcw/rtd/rtd.nsf/index_en/index_en?OpenDocument';
+const PDF_PATH = 'public/assets/forms/delta7.pdf';
+const OFFICIAL_URL = 'https://www.gov.cy/';
 
 export function render() {
   const wrap = el('section', { class: 'view-forms' });
@@ -39,7 +39,7 @@ export function render() {
 
   const notice = el('div', { class: 'form-notice' });
   notice.appendChild(el('p', {
-    text: 'Always use the latest official version from the government portal.',
+    text: 'Always use the latest official version from the government portal. The bundled copy is a reference placeholder.',
   }));
   notice.appendChild(el('a', {
     class: 'link-btn',
@@ -66,14 +66,21 @@ export function render() {
 
   // Probe the asset; if missing, hide the direct actions and show fallback.
   if (globalThis.fetch) {
-    fetch(PDF_PATH, { method: 'HEAD' })
+    globalThis.fetch(PDF_PATH, { method: 'HEAD' })
       .then((res) => {
         if (!res || !res.ok) throw new Error('missing');
       })
       .catch(() => {
-        actions.hidden = true;
-        fallback.hidden = false;
+        try {
+          actions.hidden = true;
+          fallback.hidden = false;
+        } catch {
+          // Never throw from a fallback handler.
+        }
       });
+  } else {
+    actions.hidden = true;
+    fallback.hidden = false;
   }
 
   wrap.appendChild(card);

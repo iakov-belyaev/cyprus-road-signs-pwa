@@ -1,4 +1,5 @@
-// Tests view: start screen, question screen, result screen.
+// Tests view: start screen, question screen (multiple-choice + freeform),
+// and results screen. All state is local to this module.
 
 import { SIGNS, getSignById } from '../signs-data.js';
 import {
@@ -17,57 +18,49 @@ const store = createStore();
 
 let session = null;
 
-function freshSession(mode, signs) {
-  return {
-    mode,
-    signs,
-    index: 0,
-    score: 0,
-    missed: [],
-    answered: false,
-  };
+function currentState() {
+  return store.getState();
 }
 
-function startTest(mode, signs) {
-  const state = store.getState();
-  const selected = buildTest(signs, state.weights, { length: TEST_LENGTH });
-  session = freshSession(mode, selected);
-  renderQuestion();
+function persist(state) {
+  store.setState(state);
 }
 
 function renderStart() {
-  const state = store.getState();
+  const state = currentState();
   const mode = state.settings.mode || 'multiple-choice';
 
   const wrap = el('section', { class: 'view-tests' });
-
   wrap.appendChild(el('h2', { class: 'view-title', text: 'Theory Test' }));
-  wrap.appendChild(el('p', { class: 'view-sub', text: 'Prepare for the Cyprus DMV theory test with 25-question practice runs.' }));
+  wrap.appendChild(el('p', {
+    class: 'view-sub',
+    text: `Prepare for the Cyprus DMV theory test with ${TEST_LENGTH}-question practice runs.`,
+  }));
 
   const segmented = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Answer mode' });
-  const mcBtn = el('button', {
-    class: `segmented-btn${mode === 'multiple-choice' ? ' is-active' : ''}`,
-    type: 'button',
-    text: 'Multiple-Choice',
-    'aria-pressed': mode === 'multiple-choice' ? 'true' : 'false',
-    onclick: () => setMode('multiple-choice'),
+
+  const modes = [
+    { id: 'multiple-choice', label: 'Multiple-Choice' },
+    { id: 'freeform', label: 'Freeform' },
+  ];
+
+  modes.forEach((m) => {
+    segmented.appendChild(el('button', {
+      class: `segmented-btn${mode === m.id ? ' is-active' : ''}`,
+      type: 'button',
+      text: m.label,
+      'aria-pressed': mode === m.id ? 'true' : 'false',
+      onclick: () => setMode(m.id),
+    }));
   });
-  const ffBtn = el('button', {
-    class: `segmented-btn${mode === 'freeform' ? ' is-active' : ''}`,
-    type: 'button',
-    text: 'Freeform',
-    'aria-pressed': mode === 'freeform' ? 'true' : 'false',
-    onclick: () => setMode('freeform'),
-  });
-  segmented.appendChild(mcBtn);
-  segmented.appendChild(ffBtn);
+
   wrap.appendChild(segmented);
 
   wrap.appendChild(el('button', {
     class: 'btn btn-primary btn-large',
     type: 'button',
     text: `Start ${TEST_LENGTH}-Question Test`,
-    onclick: () => startTest(store.getState().settings.mode || 'multiple-choice', SIGNS),
+    onclick: () => startTest(SIGNS),
   }));
 
   wrap.appendChild(el('p', {
@@ -79,9 +72,9 @@ function renderStart() {
 }
 
 function setMode(mode) {
-  const state = store.getState();
+  const state = currentState();
   state.settings.mode = mode;
-  store.setState(state);
+  persist(state);
   const view = document.getElementById('view');
   if (view) {
     view.innerHTML = '';
@@ -89,32 +82,47 @@ function setMode(mode) {
   }
 }
 
+function startTest(signs) {
+  const state = currentState();
+  const pool = Array.isArray(signs) && signs.length > 0 ? signs : SIGNS;
+  const questions = buildTest(pool, state.weights, { length: TEST_LENGTH });
+
+  session = {
+    questions,
+    index: 0,
+    score: 0,
+    missed: [],
+    mode: state.settings.mode || 'multiple-choice',
+    answered: false,
+  };
+
+  renderQuestion();
+}
+
 function renderQuestion() {
   const view = document.getElementById('view');
   if (!view || !session) return;
 
-  const sign = session.signs[session.index];
-  const state = store.getState();
+  const sign = session.questions[session.index];
+  const state = currentState();
   const acc = accuracy(state);
 
   const wrap = el('section', { class: 'view-tests question-view' });
 
-  // Sticky header
   const header = el('div', { class: 'question-header' });
   header.appendChild(el('div', { class: 'question-meta' }, [
-    el('span', { class: 'question-count', text: `Question ${session.index + 1}/${session.signs.length}` }),
+    el('span', { class: 'question-count', text: `Question ${session.index + 1}/${session.questions.length}` }),
     el('span', { class: 'question-accuracy', text: `Accuracy: ${acc}%` }),
   ]));
   const bar = el('div', { class: 'progress-track' });
   const fill = el('div', {
     class: 'progress-fill',
-    style: `width:${((session.index) / session.signs.length) * 100}%`,
+    style: `width:${(session.index / session.questions.length) * 100}%`,
   });
   bar.appendChild(fill);
   header.appendChild(bar);
   wrap.appendChild(header);
 
-  // Sign image
   const imageArea = el('div', { class: 'question-image' });
   imageArea.appendChild(signImage(sign, { className: 'sign-img sign-img-large' }));
   wrap.appendChild(imageArea);
@@ -127,7 +135,7 @@ function renderQuestion() {
 
   view.innerHTML = '';
   view.appendChild(wrap);
-  announce(`Question ${session.index + 1} of ${session.signs.length}`);
+  announce(`Question ${session.index + 1} of ${session.questions.length}`);
 }
 
 function renderMultipleChoice(sign) {
@@ -154,7 +162,7 @@ function handleChoice(btn, opt, sign, buttons) {
 
   const isCorrect = opt.id === sign.id;
 
-  // Apply visual state synchronously.
+  // Apply visual state synchronously before any timer.
   buttons.forEach((b) => { b.disabled = true; });
   if (isCorrect) {
     btn.classList.add('is-correct');
@@ -168,7 +176,7 @@ function handleChoice(btn, opt, sign, buttons) {
   announce(isCorrect ? 'Correct' : 'Incorrect');
   commitAnswer(sign, isCorrect);
 
-  setTimeout(() => advance(), 900);
+  globalThis.setTimeout(() => advance(), 900);
 }
 
 function renderFreeform(sign) {
@@ -185,9 +193,17 @@ function renderFreeform(sign) {
     spellcheck: 'false',
   });
 
-  const submit = () => {
+  const checkBtn = el('button', {
+    class: 'btn btn-primary',
+    type: 'button',
+    text: 'Check',
+    onclick: () => submit(),
+  });
+
+  function submit() {
     if (session.answered) return;
     const value = input.value;
+    if (!value.trim()) return;
     const isCorrect = isAnswerCorrect(value, sign);
     session.answered = true;
     input.disabled = true;
@@ -203,15 +219,8 @@ function renderFreeform(sign) {
 
     announce(isCorrect ? 'Correct' : 'Incorrect');
     commitAnswer(sign, isCorrect);
-    setTimeout(() => advance(), 1200);
-  };
-
-  const checkBtn = el('button', {
-    class: 'btn btn-primary',
-    type: 'button',
-    text: 'Check',
-    onclick: submit,
-  });
+    globalThis.setTimeout(() => advance(), 1200);
+  }
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -233,7 +242,7 @@ function renderFreeform(sign) {
       feedback.textContent = `Correct answer: ${sign.name}`;
       announce('Skipped');
       commitAnswer(sign, false);
-      setTimeout(() => advance(), 1200);
+      globalThis.setTimeout(() => advance(), 1200);
     },
   });
 
@@ -242,14 +251,13 @@ function renderFreeform(sign) {
   container.appendChild(skip);
   container.appendChild(feedback);
 
-  setTimeout(() => input.focus(), 50);
+  globalThis.setTimeout(() => input.focus(), 50);
   return container;
 }
 
 function commitAnswer(sign, isCorrect) {
-  const state = store.getState();
-  const next = recordAnswer(state, sign.id, isCorrect);
-  store.setState(next);
+  const next = recordAnswer(currentState(), sign.id, isCorrect);
+  persist(next);
 
   if (isCorrect) {
     session.score += 1;
@@ -261,7 +269,7 @@ function commitAnswer(sign, isCorrect) {
 function advance() {
   session.index += 1;
   session.answered = false;
-  if (session.index >= session.signs.length) {
+  if (session.index >= session.questions.length) {
     renderResult();
   } else {
     renderQuestion();
@@ -272,18 +280,17 @@ function renderResult() {
   const view = document.getElementById('view');
   if (!view || !session) return;
 
-  const total = session.signs.length;
+  const total = session.questions.length;
   const score = session.score;
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
 
-  const state = store.getState();
-  const finished = finishTest(state, {
+  const finished = finishTest(currentState(), {
     score,
     total,
     mode: session.mode,
     dateISO: new Date().toISOString(),
   });
-  store.setState(finished);
+  persist(finished);
 
   const wrap = el('section', { class: 'view-tests result-view' });
   wrap.appendChild(el('h2', { class: 'view-title', text: 'Test Complete' }));
@@ -314,8 +321,7 @@ function renderResult() {
       text: 'Retry Missed Signs Only',
       onclick: () => {
         const missedSigns = unique.map((id) => getSignById(id)).filter(Boolean);
-        session = freshSession(session.mode, missedSigns);
-        renderQuestion();
+        startTest(missedSigns);
       },
     }));
   }

@@ -1,27 +1,32 @@
-// Catalog view: search, category chips, grid, detail modal.
+// Catalog view: debounced search, category chips, sign grid, detail modal.
 
-import { SIGNS, CATEGORIES, searchSigns, getSignsByCategory } from '../signs-data.js';
-import { el, signImage, categoryColor, categoryLabel, debounce, trapFocus } from '../ui.js';
+import { CATEGORIES, SIGNS, searchSigns, getSignById } from '../signs-data.js';
+import { el, signImage, categoryColor, categoryLabel, trapFocus } from '../ui.js';
 
 let activeCategory = 'all';
 let query = '';
+let debounceTimer = null;
+
+/** Open the detail modal for a sign id (used by the Progress view). */
+export function openSignDetail(signId) {
+  const sign = getSignById(signId);
+  if (sign) openModal(sign);
+}
 
 function currentSigns() {
-  const base = activeCategory === 'all' ? SIGNS : getSignsByCategory(activeCategory);
+  const base = activeCategory === 'all' ? SIGNS : SIGNS.filter((s) => s.category === activeCategory);
   if (!query) return base;
   const matched = new Set(searchSigns(query).map((s) => s.id));
   return base.filter((s) => matched.has(s.id));
 }
 
 function renderGrid() {
-  const grid = document.getElementById('catalog-grid');
-  if (!grid) return;
+  const grid = el('div', { class: 'catalog-grid' });
   const signs = currentSigns();
-  grid.innerHTML = '';
 
   if (signs.length === 0) {
     grid.appendChild(el('p', { class: 'empty-state', text: 'No signs match your search.' }));
-    return;
+    return grid;
   }
 
   signs.forEach((sign) => {
@@ -39,6 +44,8 @@ function renderGrid() {
     card.appendChild(el('span', { class: 'sign-card-name', text: sign.name }));
     grid.appendChild(card);
   });
+
+  return grid;
 }
 
 function openModal(sign) {
@@ -106,46 +113,41 @@ export function render() {
     'aria-label': 'Search signs',
     value: query,
   });
-  const debounced = debounce((value) => {
-    query = value;
-    renderGrid();
-  }, 150);
-  search.addEventListener('input', (e) => debounced(e.target.value));
+  search.addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (debounceTimer) globalThis.clearTimeout(debounceTimer);
+    debounceTimer = globalThis.setTimeout(() => {
+      query = value;
+      gridHolder.innerHTML = '';
+      gridHolder.appendChild(renderGrid());
+    }, 150);
+  });
   wrap.appendChild(search);
 
   const chips = el('div', { class: 'chips', role: 'group', 'aria-label': 'Filter by category' });
-  const allChip = el('button', {
-    class: `chip${activeCategory === 'all' ? ' is-active' : ''}`,
-    type: 'button',
-    text: 'All',
-    onclick: () => selectCategory('all'),
-  });
-  chips.appendChild(allChip);
-  CATEGORIES.forEach((cat) => {
+  const chipDefs = [{ id: 'all', label: 'All', color: '#5b6472' }, ...CATEGORIES];
+  chipDefs.forEach((cat) => {
     chips.appendChild(el('button', {
       class: `chip${activeCategory === cat.id ? ' is-active' : ''}`,
       type: 'button',
-      text: cat.label,
+      text: cat.shortLabel || cat.label,
       style: `--chip-color:${cat.color}`,
-      onclick: () => selectCategory(cat.id),
+      'aria-pressed': activeCategory === cat.id ? 'true' : 'false',
+      onclick: () => {
+        activeCategory = cat.id;
+        const view = document.getElementById('view');
+        if (view) {
+          view.innerHTML = '';
+          view.appendChild(render());
+        }
+      },
     }));
   });
   wrap.appendChild(chips);
 
-  const grid = el('div', { class: 'catalog-grid', id: 'catalog-grid' });
-  wrap.appendChild(grid);
-
-  // Defer grid render until mounted.
-  setTimeout(renderGrid, 0);
+  const gridHolder = el('div');
+  gridHolder.appendChild(renderGrid());
+  wrap.appendChild(gridHolder);
 
   return wrap;
-}
-
-function selectCategory(id) {
-  activeCategory = id;
-  const view = document.getElementById('view');
-  if (view) {
-    view.innerHTML = '';
-    view.appendChild(render());
-  }
 }

@@ -1,6 +1,7 @@
 // Shared DOM helpers for views. Kept small and dependency-free.
 
 import { CATEGORIES } from './signs-data.js';
+import { imageCandidates, initials as imageInitials, categoryColorFor } from './images.js';
 
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -35,43 +36,48 @@ export function categoryLabel(categoryId) {
   return cat ? cat.label : categoryId;
 }
 
-function initials(name) {
-  return String(name || '?')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
-}
-
 /**
  * Build a sign image element with a graceful placeholder fallback.
+ * Walks the candidate list from js/images.js exactly once per candidate,
+ * then replaces the image with an inline placeholder.
  */
 export function signImage(sign, { className = 'sign-img', alt } = {}) {
   const wrap = el('div', { class: 'sign-img-wrap' });
   const image = el('img', {
     class: className,
-    src: sign.image,
-    alt: alt || sign.name,
+    alt: alt || (sign && sign.name) || '',
     loading: 'lazy',
+    decoding: 'async',
   });
 
   const placeholder = el('div', {
     class: 'sign-placeholder',
-    style: `--cat-color:${categoryColor(sign.category)}`,
+    style: `--cat-color:${categoryColorFor(sign)}`,
     'aria-hidden': 'true',
   }, [
-    el('span', { class: 'sign-placeholder-initials', text: initials(sign.name) }),
+    el('span', { class: 'sign-placeholder-initials', text: imageInitials(sign && sign.name) }),
   ]);
 
+  const candidates = imageCandidates(sign);
+  let index = 0;
+  if (candidates.length > 0) image.src = candidates[0];
+
   image.addEventListener('error', () => {
-    image.style.display = 'none';
-    placeholder.style.display = 'flex';
+    try {
+      index += 1;
+      if (index < candidates.length) {
+        image.src = candidates[index];
+      } else {
+        image.remove();
+        if (!wrap.contains(placeholder)) wrap.appendChild(placeholder);
+      }
+    } catch {
+      image.remove();
+      if (!wrap.contains(placeholder)) wrap.appendChild(placeholder);
+    }
   });
 
-  placeholder.style.display = 'none';
   wrap.appendChild(image);
-  wrap.appendChild(placeholder);
   return wrap;
 }
 

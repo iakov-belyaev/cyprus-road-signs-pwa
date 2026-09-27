@@ -1,23 +1,28 @@
 // Progress view: stat cards, most-missed list, history, reset.
 
-import { SIGNS, getSignById } from '../signs-data.js';
+import { SIGNS } from '../signs-data.js';
 import { accuracy, mostMissed, TEST_LENGTH } from '../quiz-engine.js';
 import { createStore } from '../storage.js';
 import { el, signImage, announce } from '../ui.js';
+import { openSignDetail } from './catalog.js';
 
 const store = createStore();
-
-function openDetail(sign) {
-  // Reuse the catalog modal by dispatching a lightweight custom event.
-  const event = new CustomEvent('cyrs:open-sign', { detail: sign });
-  document.dispatchEvent(event);
-}
 
 function statCard(label, value) {
   const card = el('div', { class: 'stat-card' });
   card.appendChild(el('div', { class: 'stat-value', text: String(value) }));
   card.appendChild(el('div', { class: 'stat-label', text: label }));
   return card;
+}
+
+function formatDate(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso || '—');
+    return d.toLocaleDateString();
+  } catch {
+    return String(iso || '—');
+  }
 }
 
 export function render() {
@@ -45,7 +50,7 @@ export function render() {
         class: 'missed-btn',
         type: 'button',
         'aria-label': `${sign.name}, missed ${count} times`,
-        onclick: () => openDetail(sign),
+        onclick: () => openSignDetail(sign.id),
       });
       btn.appendChild(signImage(sign, { className: 'sign-img sign-img-thumb' }));
       btn.appendChild(el('span', { class: 'missed-name', text: sign.name }));
@@ -58,15 +63,13 @@ export function render() {
 
   // History
   wrap.appendChild(el('h3', { class: 'section-heading', text: 'Session History' }));
-  if (state.history.length === 0) {
+  if (!state.history || state.history.length === 0) {
     wrap.appendChild(el('p', { class: 'empty-state', text: 'No sessions recorded yet.' }));
   } else {
     const list = el('ul', { class: 'history-list' });
     state.history.forEach((entry) => {
       const li = el('li', { class: 'history-item' });
-      const date = entry.dateISO ? new Date(entry.dateISO) : null;
-      const dateText = date && !isNaN(date) ? date.toLocaleDateString() : '—';
-      li.appendChild(el('span', { class: 'history-date', text: dateText }));
+      li.appendChild(el('span', { class: 'history-date', text: formatDate(entry.dateISO) }));
       li.appendChild(el('span', { class: 'history-mode', text: entry.mode === 'freeform' ? 'Freeform' : 'Multiple-Choice' }));
       li.appendChild(el('span', { class: 'history-score', text: `${entry.score}/${entry.total}` }));
       list.appendChild(li);
@@ -81,6 +84,7 @@ export function render() {
     onclick: () => {
       if (globalThis.confirm && !globalThis.confirm('Reset all progress? This cannot be undone.')) return;
       store.clearAll();
+      store.setState(store.getState());
       announce('Progress reset');
       const view = document.getElementById('view');
       if (view) {
